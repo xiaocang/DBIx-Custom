@@ -2,7 +2,7 @@ use 5.008007;
 package DBIx::Custom;
 use Object::Simple -base;
 
-our $VERSION = '0.38';
+our $VERSION = '0.38.02';
 
 use Carp 'croak';
 use DBI;
@@ -52,7 +52,7 @@ has mytable_symbol => '__MY__';
 
 sub available_datatype {
   my $self = shift;
-  
+
   my $data_types = '';
   for my $i (-1000 .. 1000) {
      my $type_info = $self->dbh->type_info($i);
@@ -68,7 +68,7 @@ sub available_datatype {
 
 sub available_typename {
   my $self = shift;
-  
+
   # Type Names
   my $type_names = {};
   $self->each_column(sub {
@@ -104,10 +104,10 @@ sub AUTOLOAD {
 
 sub assign_clause {
   my ($self, $param, $opts) = @_;
-  
+
   my $wrap = $opts->{wrap} || {};
   my ($q, $p) = $self->_qp;
-  
+
   # Assign clause (performance is important)
   join(
     ', ',
@@ -125,37 +125,37 @@ sub column {
   my $real_table = shift;
   my $columns = shift;
   my $table = $option->{alias} || $real_table;
-  
+
   # Columns
   if (!defined $columns || $columns eq '*') {
     $columns = $self->model($real_table)->columns;
   }
-  
+
   # Separator
   my $separator = $self->separator;
-  
+
   # . is replaced
   my $t = $table;
   $t =~ s/\./$separator/g;
-  
+
   # Column clause
   my @column;
   $columns ||= [];
   push @column, $self->_tq($table) . "." . $self->q($_) .
     " as " . $self->q("${t}${separator}$_")
     for @$columns;
-  
+
   return join (', ', @column);
 }
 
 sub connect {
   my $self = ref $_[0] ? shift : shift->new(@_);
-  
+
   my $connector = $self->connector;
-  
+
   if (!ref $connector && $connector) {
     require DBIx::Connector;
-    
+
     my $dsn = $self->dsn;
     my $user = $self->user;
     my $password = $self->password;
@@ -164,10 +164,10 @@ sub connect {
       {%{$self->default_option} , %$option});
     $self->connector($connector);
   }
-  
+
   # Connect
   $self->dbh;
-  
+
   return $self;
 }
 
@@ -175,27 +175,27 @@ sub count { shift->select(column => 'count(*)', @_)->fetch_one->[0] }
 
 sub dbh {
   my $self = shift;
-  
+
   # Set
   if (@_) {
     $self->{dbh} = $_[0];
-    
+
     return $self;
   }
-  
+
   # Get
   else {
     # From Connction manager
     if (my $connector = $self->connector) {
       croak "connector must have dbh() method " . _subname
         unless ref $connector && $connector->can('dbh');
-        
+
       $self->{dbh} = $connector->dbh;
     }
-    
+
     # Connect
     $self->{dbh} ||= $self->_connect;
-    
+
     # Quote
     if (!defined $self->quote) {
       my $driver = $self->_driver;
@@ -205,26 +205,26 @@ sub dbh {
         : '"';
       $self->quote($quote);
     }
-    
+
     return $self->{dbh};
   }
 }
 
 sub delete {
   my ($self, %opt) = @_;
-  
+
   # Don't allow delete all rows
   croak qq{delete method where or id option must be specified } . _subname
     if !$opt{where} && !defined $opt{id} && !$opt{allow_delete_all};
-  
+
   # Where
   my $w = $self->_where_clause_and_param($opt{where}, delete $opt{id}, $opt{primary_key}, $opt{table});
-  
+
   # Delete statement
   my $sql = "delete ";
   $sql .= "$opt{prefix} " if defined $opt{prefix};
   $sql .= "from " . $self->_tq($opt{table}) . " $w->{clause} ";
-  
+
   # Execute query
   $opt{statement} = 'delete';
   $self->execute($sql, $w->{param}, %opt);
@@ -236,7 +236,7 @@ sub DESTROY {}
 
 sub create_model {
   my $self = shift;
-  
+
   # Options
   my $opt = ref $_[0] eq 'HASH' ? $_[0] : {@_};
   $opt->{dbi} = $self;
@@ -244,23 +244,23 @@ sub create_model {
   my $model_name  = delete $opt->{name};
   my $model_table = delete $opt->{table};
   $model_name ||= $model_table;
-  
+
   # Create model
   my $model = $model_class->new($opt);
   weaken $model->{dbi};
   $model->table($model_table) unless $model->table;
-  
+
   # Set model
   $self->model($model->table, $model);
-  
+
   return $self->model($model->table);
 }
 
 sub each_column {
   my ($self, $cb, %options) = @_;
-  
+
   my $user_column_info = $self->user_column_info;
-  
+
   if ($user_column_info) {
     $self->$cb($_->{table}, $_->{column}, $_->{info}) for @$user_column_info;
   }
@@ -277,7 +277,7 @@ sub each_column {
     # Iterate all tables
     for my $schema (sort keys %$tables) {
       for my $table (sort keys %{$tables->{$schema}}) {
-        
+
         # Iterate all columns
         my $sth_columns;
         eval {$sth_columns = $self->dbh->column_info(undef, $schema, $table, '%')};
@@ -293,9 +293,9 @@ sub each_column {
 
 sub each_table {
   my ($self, $cb, %option) = @_;
-  
+
   my $user_table_infos = $self->user_table_info;
-  
+
   # Iterate tables
   if ($user_table_infos) {
       $self->$cb($_->{table}, $_->{info}) for @$user_table_infos;
@@ -320,42 +320,42 @@ sub execute {
   my $params;
   $params = shift if @_ % 2;
   my %opt = @_;
-  
+
   # Async query
   $opt{prepare_attr} = $self->async_conf->{prepare_attr} if $opt{async};
   if ($opt{async} && !$self->{_new_connection}) {
     my $dsn = $self->dsn;
     croak qq/Data source must be specified when "async" option is used/
       unless defined $dsn;
-    
+
     my $user = $self->user;
     my $password = $self->password;
     my $option = $self->option;
-    
+
     my $new_dbi = bless {%$self}, ref $self;
     $new_dbi->connector(undef);
     $new_dbi->{dbh} = DBI->connect($dsn, $user, $password,
       {%{$new_dbi->default_option}, %$option, PrintError => 0, RaiseError => 0});
-    
+
     $new_dbi->{_new_connection} = 1;
     return $new_dbi->execute($sql, defined $params ? ($params) : (), %opt);
   }
-  
+
   # Options
   $params ||= $opt{param} || {};
   my $tables = $opt{table} || [];
   $tables = [$tables] unless ref $tables eq 'ARRAY';
   my $filter = ref $opt{filter} eq 'ARRAY' ?
     _array_to_hash($opt{filter}) : $opt{filter};
-  
+
   # Merge second parameter
   $opt{statement} ||= '';
   $opt{statement} = 'select' if $opt{select};
   $params = [$params] unless ref $params eq 'ARRAY';
-  
+
   # Append
   $sql .= $opt{append} if defined $opt{append};
-  
+
   # Query
   my $query;
   $query = $opt{reuse}->{$sql} if $opt{reuse};
@@ -372,14 +372,14 @@ sub execute {
   }
   $query->{statement} = $opt{statement} || '';
   $opt{reuse}->{$sql} = $query if $opt{reuse};
-      
+
   # Save query
   $self->{last_sql} = $query->{sql};
-  
+
   # Tables
   unshift @$tables, @{$query->{tables} || []};
   my $main_table = @{$tables}[-1];
-  
+
   # Type rule
   my $type_filters = {};
   my $type_rule_off = !$self->{_type_rule_is_called} || $opt{type_rule_off};
@@ -394,7 +394,7 @@ sub execute {
         my $table_alias = $opt{table_alias} || {};
         for my $alias (keys %$table_alias) {
           my $table = $table_alias->{$alias};
-          
+
           for my $column (keys %{$self->{"_into$i"}{key}{$table} || {}}) {
             $type_filters->{$i}->{"$alias.$column"} = $self->{"_into$i"}{key}{$table}{$column};
           }
@@ -404,7 +404,7 @@ sub execute {
       }
     }
   }
-  
+
   # Replace filter name to code
   for my $column (keys %$filter) {
     my $name = $filter->{$column};
@@ -473,10 +473,10 @@ sub execute {
       };
     }
   }
-  
+
   $self->_croak($@, qq{. Following SQL is executed.\n}
     . qq{$query->{sql}\n} . _subname) if $@;
-  
+
   # Affected of insert, update, or delete
   if (!$sth->{NUM_OF_FIELDS} && $opt{statement} ne 'select') {
     # Non-Blocking
@@ -504,7 +504,7 @@ sub execute {
   }
   # Reulst of select statement
   else {
-    
+
     # Result
     my $result = $self->result_class->new(
       sth => $sth,
@@ -514,7 +514,7 @@ sub execute {
         from2 => $self->type_rule->{from2}
       },
     );
-    
+
     # Non-Blocking
     if (my $cb = $opt{async}) {
       require AnyEvent;
@@ -528,7 +528,7 @@ sub execute {
           if ($driver eq 'mysql') {
             $sth->mysql_async_result;
           }
-          
+
           $cb->($self, $result);
           undef $watcher;
           undef $result;
@@ -544,31 +544,31 @@ sub execute {
 
 sub get_table_info {
   my ($self, %opt) = @_;
-  
+
   my $exclude = delete $opt{exclude};
   croak qq/"$_" is wrong option/ for keys %opt;
-  
+
   my $table_info = [];
   $self->each_table(
     sub { push @$table_info, {table => $_[1], info => $_[2] } },
     exclude => $exclude
   );
-  
+
   return [sort {$a->{table} cmp $b->{table} } @$table_info];
 }
 
 sub get_column_info {
   my ($self, %opt) = @_;
-  
+
   my $exclude_table = delete $opt{exclude_table};
   croak qq/"$_" is wrong option/ for keys %opt;
-  
+
   my $column_info = [];
   $self->each_column(
     sub { push @$column_info, {table => $_[1], column => $_[2], info => $_[3] } },
     exclude_table => $exclude_table
   );
-  
+
   return [
     sort {$a->{table} cmp $b->{table} || $a->{column} cmp $b->{column} }
       @$column_info];
@@ -576,26 +576,26 @@ sub get_column_info {
 
 sub helper {
   my $self = shift;
-  
+
   # Register method
   my $methods = ref $_[0] eq 'HASH' ? $_[0] : {@_};
   $self->{_methods} = {%{$self->{_methods} || {}}, %$methods};
-  
+
   return $self;
 }
 
 sub insert {
   my $self = shift;
-  
+
   # Options
   my $params = @_ % 2 ? shift : undef;
   my %opt = @_;
   $params ||= {};
-  
+
   my $multi;
   if (ref $params eq 'ARRAY') { $multi = 1 }
   else { $params = [$params] }
-  
+
   # Created time and updated time
   if (defined $opt{ctime} || defined $opt{mtime}) {
     for my $param (@$params) {
@@ -610,14 +610,14 @@ sub insert {
       $_->{$opt{mtime}} = $now for @$params;
     }
   }
-  
+
   # Merge id to parameter
   my $id_param = {};
   if (defined $opt{id} && !$multi) {
     for my $param (@$params) {
       $param = {%$param};
     }
-    
+
     croak "insert id option must be specified with primary_key option"
       unless $opt{primary_key};
     $opt{primary_key} = [$opt{primary_key}] unless ref $opt{primary_key} eq 'ARRAY';
@@ -628,7 +628,7 @@ sub insert {
       $params->[0]->{$key} = $opt{id}->[$i];
     }
   }
-  
+
   # Insert statement
   my $sql = "insert ";
   $sql .= "$opt{prefix} " if defined $opt{prefix};
@@ -645,7 +645,7 @@ sub insert {
   else {
     $sql .= $self->values_clause($params->[0], {wrap => $opt{wrap}}) . " ";
   }
-  
+
   # Execute query
   $opt{statement} = 'insert';
   $self->execute($sql, $params, %opt);
@@ -653,10 +653,10 @@ sub insert {
 
 sub include_model {
   my ($self, $name_space, $model_infos) = @_;
-  
+
   # Name space
   $name_space ||= '';
-  
+
   # Get Model information
   unless ($model_infos) {
 
@@ -666,7 +666,7 @@ sub include_model {
     eval "use $name_space";
     croak qq{Name space module "$name_space.pm" is needed. $@ } . _subname
       if $@;
-    
+
     # Search model modules
     my $name_space_dir = $name_space;
     $name_space_dir =~ s/::/\//g;
@@ -690,16 +690,16 @@ sub include_model {
       elsif(-f $file_abs) { push @modules, $file }
     }
     close $dh;
-    
+
     $model_infos = [];
     for my $module (@modules) {
       if ($module =~ s/\.pm$//) { push @$model_infos, $module }
     }
   }
-  
+
   # Include models
   for my $model_info (@$model_infos) {
-    
+
     # Load model
     my $model_class;
     my $model_name;
@@ -708,7 +708,7 @@ sub include_model {
       $model_class = $model_info->{class};
       $model_name  = $model_info->{name};
       $model_table = $model_info->{table};
-      
+
       $model_name  ||= $model_class;
       $model_table ||= $model_name;
     }
@@ -727,7 +727,7 @@ sub include_model {
       eval "require $mclass";
       croak "$@ " . _subname if $@;
     }
-    
+
     # Create model
     my $opt = {};
     $opt->{model_class} = $mclass if $mclass;
@@ -735,7 +735,7 @@ sub include_model {
     $opt->{table}       = $model_table if $model_table;
     $self->create_model($opt);
   }
-  
+
   return $self;
 }
 
@@ -748,46 +748,46 @@ sub mapper {
 
 sub merge_param {
   my ($self, @params) = @_;
-  
+
   # Merge parameters
   my $merge = {};
   for my $param (@params) {
     for my $column (keys %$param) {
       my $param_is_array = ref $param->{$column} eq 'ARRAY' ? 1 : 0;
-      
+
       if (exists $merge->{$column}) {
         $merge->{$column} = [$merge->{$column}]
           unless ref $merge->{$column} eq 'ARRAY';
         push @{$merge->{$column}},
-          ref $param->{$column} ? @{$param->{$column}} : $param->{$column};
+          $param_is_array ? @{$param->{$column}} : $param->{$column};
       }
       else { $merge->{$column} = $param->{$column} }
     }
   }
-  
+
   return $merge;
 }
 
 sub model {
   my ($self, $name, $model) = @_;
-  
+
   # Set model
   if ($model) {
     $self->models->{$name} = $model;
     return $self;
   }
-  
+
   # Check model existence
   croak qq{Model "$name" is not included } . _subname
     unless $self->models->{$name};
-  
+
   # Get model
   return $self->models->{$name};
 }
 
 sub mycolumn {
   my ($self, $table, $columns) = @_;
-  
+
   if (!$columns || $columns eq '*') {
     $columns = $self->model($table)->columns;
   }
@@ -796,23 +796,23 @@ sub mycolumn {
   my @column;
   push @column, $self->_tq($table) . "." . $self->q($_) . " as " . $self->q($_)
     for @$columns;
-  
+
   return join (', ', @column);
 }
 
 sub new {
   my $self = shift->SUPER::new(@_);
-  
+
   # Check attributes
   my @attrs = keys %$self;
   for my $attr (@attrs) {
     croak qq{Invalid attribute: "$attr" } . _subname
       unless $self->can($attr);
   }
-  
+
   $self->{safety_character} = 'a-zA-Z0-9_'
     unless exists $self->{safety_character};
-  
+
   return $self;
 }
 
@@ -827,21 +827,21 @@ sub q { shift->_tq($_[0], $_[1], whole => 1) }
 
 sub _tq {
   my ($self, $value, $quotemeta, %opt) = @_;
-  
+
   my $quote = $self->{quote} || $self->quote || '';
-  
+
   my $q = substr($quote, 0, 1) || '';
   my $p;
   if (defined $quote && length $quote > 1) {
     $p = substr($quote, 1, 1);
   }
   else { $p = $q }
-  
+
   if ($quotemeta) {
     $q = quotemeta($q);
     $p = quotemeta($p);
   }
-  
+
   if ($opt{whole}) { return "$q$value$p" }
   else {
     my @values = split /\./, $value;
@@ -855,29 +855,29 @@ sub _qp {
   my ($self, %opt) = @_;
 
   my $quote = $self->{quote} || $self->quote || '';
-  
+
   my $q = substr($quote, 0, 1) || '';
   my $p;
   if (defined $quote && length $quote > 1) {
     $p = substr($quote, 1, 1);
   }
   else { $p = $q }
-  
+
   if ($opt{quotemeta}) {
     $q = quotemeta($q);
     $p = quotemeta($p);
   }
-  
+
   return ($q, $p);
 }
 
 sub register_filter {
   my $self = shift;
-  
+
   # Register filter
   my $filters = ref $_[0] eq 'HASH' ? $_[0] : {@_};
   $self->filters({%{$self->filters}, %$filters});
-  
+
   return $self;
 }
 
@@ -896,13 +896,13 @@ sub select {
   $opt{table} = $tables;
   $table_is_empty = 1 unless @$tables;
   $opt{param} ||= {};
-  
+
   # Select statement
   my $sql = 'select ';
-  
+
   # Prefix
   $sql .= "$opt{prefix} " if defined $opt{prefix};
-  
+
   # Column
   if (defined $opt{column}) {
     my $columns
@@ -912,7 +912,7 @@ sub select {
         my $mytable_symbol = $opt{mytable_symbol} || $self->mytable_symbol;
         my $table = (keys %$column)[0];
         my $columns = $column->{$table};
-        
+
         if ($table eq $mytable_symbol) {
           $column = $self->mycolumn($tables->[0] => $columns);
         }
@@ -938,14 +938,14 @@ sub select {
 
   # Add tables in parameter
   unshift @$tables, @{$self->_search_tables(join(' ', keys %{$opt{param}}) || '')};
-  
+
   # Where
   my $w = $self->_where_clause_and_param($opt{where}, delete $opt{id}, $opt{primary_key}, @$tables ? $tables->[-1] : undef);
   $opt{param} = $self->merge_param($opt{param}, $w->{param});
-  
+
   # Add table names in where clause
   unshift @$tables, @{$self->_search_tables($w->{clause})};
-  
+
   # Join statement
   my $join = [];
   if (defined $opt{join}) {
@@ -963,25 +963,25 @@ sub select {
     else { push @$join, $where_join }
   }
   $self->_push_join(\$sql, $join, $tables) if @$join;
-  
+
   # Add where clause
   $sql .= "$w->{clause} ";
-  
+
   # Execute query
   return $self->execute($sql, %opt);
 }
 
 sub setup_model {
   my ($self, %opt) = @_;
-  
+
   # Setup model
   $self->each_column(
     sub {
       my ($self, $table, $column, $column_info) = @_;
       my $schema = $column_info->{TABLE_SCHEM};
-      
+
       my $default_schema = $self->default_schema;
-      
+
       if (my $model = $self->models->{$table}) {
         if (!defined $default_schema || $default_schema eq $schema) {
           push @{$model->columns}, $column;
@@ -999,13 +999,13 @@ sub show_datatype {
   my ($self, $table) = @_;
   croak "Table name must be specified" unless defined $table;
   print "$table\n";
-  
+
   my $result = $self->select(table => $table, where => "'0' <> '0'");
   my $sth = $result->sth;
 
   my $columns = $sth->{NAME};
   my $data_types = $sth->{TYPE};
-  
+
   for (my $i = 0; $i < @$columns; $i++) {
     my $column = $columns->[$i];
     my $data_type = lc $data_types->[$i];
@@ -1017,20 +1017,20 @@ sub show_typename {
   my ($self, $t) = @_;
   croak "Table name must be specified" unless defined $t;
   print "$t\n";
-  
+
   $self->each_column(sub {
     my ($self, $table, $column, $infos) = @_;
     return unless $table eq $t;
     my $typename = lc $infos->{TYPE_NAME};
     print "$column: $typename\n";
   });
-  
+
   return $self;
 }
 
 sub show_tables {
   my $self = shift;
-  
+
   my %tables;
   $self->each_table(sub { $tables{$_[1]}++ });
   print join("\n", sort keys %tables) . "\n";
@@ -1041,10 +1041,10 @@ sub type_rule {
   my $self = shift;
 
   $self->{_type_rule_is_called} = 1;
-  
+
   if (@_) {
     my $type_rule = ref $_[0] eq 'HASH' ? $_[0] : {@_};
-    
+
     # Into
     for my $i (1 .. 2) {
       my $into = "into$i";
@@ -1056,31 +1056,31 @@ sub type_rule {
         croak qq{type name of $into section must be lower case}
           if $type_name =~ /[A-Z]/;
       }
-      
+
       $self->each_column(sub {
         my ($dbi, $table, $column, $column_info) = @_;
-        
+
         my $type_name = lc $column_info->{TYPE_NAME};
         if ($type_rule->{$into} &&
             (my $filter = $type_rule->{$into}->{$type_name}))
         {
           return unless exists $type_rule->{$into}->{$type_name};
-          if (defined $filter && ref $filter ne 'CODE') 
+          if (defined $filter && ref $filter ne 'CODE')
           {
             my $fname = $filter;
             croak qq{Filter "$fname" is not registered" } . _subname
               unless exists $self->filters->{$fname};
-            
+
             $filter = $self->filters->{$fname};
           }
-          
+
           my $schema = $column_info->{TABLE_SCHEM};
           my $default_schema = $self->default_schema;
           if (!defined $default_schema || $default_schema eq $schema) {
             $self->{"_$into"}{key}{$table}{$column} = $filter;
             $self->{"_$into"}{dot}{"$table.$column"} = $filter;
           }
-          
+
           $self->{"_$into"}{key}{"$schema.$table"}{$column} = $filter;
           $self->{"_$into"}{dot}{"$schema.$table.$column"} = $filter;
         }
@@ -1097,15 +1097,15 @@ sub type_rule {
         if (defined $fname && ref $fname ne 'CODE') {
           croak qq{Filter "$fname" is not registered" } . _subname
             unless exists $self->filters->{$fname};
-          
+
           $type_rule->{"from$i"}{$data_type} = $self->filters->{$fname};
         }
       }
     }
-    
+
     return $self;
   }
-  
+
   return $self->{type_rule} || {};
 }
 
@@ -1116,11 +1116,11 @@ sub update {
   my $param = @_ % 2 ? shift : undef;
   my %opt = @_;
   $param ||= {};
-  
+
   # Don't allow update all rows
   croak qq{update method where option must be specified } . _subname
     if !$opt{where} && !defined $opt{id} && !$opt{allow_update_all};
-  
+
   # Created time and updated time
   if (defined $opt{mtime}) {
     $param = {%$param};
@@ -1131,18 +1131,18 @@ sub update {
 
   # Assign clause
   my $assign_clause = $self->assign_clause($param, {wrap => $opt{wrap}});
-  
+
   # Where
   my $w = $self->_where_clause_and_param($opt{where}, delete $opt{id}, $opt{primary_key}, $opt{table});
-  
+
   # Merge update parameter with where parameter
   $param = $self->merge_param($param, $w->{param});
-  
+
   # Update statement
   my $sql = "update ";
   $sql .= "$opt{prefix} " if defined $opt{prefix};
   $sql .= $self->_tq($opt{table}) . " set $assign_clause $w->{clause} ";
-  
+
   # Execute query
   $opt{statement} = 'update';
   $self->execute($sql, $param, %opt);
@@ -1169,12 +1169,12 @@ sub update_or_insert {
 
 sub values_clause {
   my ($self, $param, $opts) = @_;
-  
+
   my $wrap = $opts->{wrap} || {};
-  
+
   # Create insert parameter tag
   my ($q, $p) = $self->_qp;
-  
+
   # values clause(performance is important)
   '(' .
   join(
@@ -1195,17 +1195,17 @@ sub values_clause {
 
 sub _multi_values_clause {
   my ($self, $params, $opts) = @_;
-  
+
   my $wrap = $opts->{wrap} || {};
-  
+
   # Create insert parameter tag
   my ($q, $p) = $self->_qp;
-  
+
   # Multi values clause
   my $clause = '(' . join(', ', map { "$q$_$p" } sort keys %{$params->[0]}) . ') values ';
-  
+
   for (1 .. @$params) {
-    $clause .= '(' . join(', ', 
+    $clause .= '(' . join(', ',
       map {
         ref $params->[0]->{$_} eq 'SCALAR' ? ${$params->[0]->{$_}} :
         $wrap->{$_} ? $wrap->{$_}->(":$_") :
@@ -1220,11 +1220,11 @@ sub _multi_values_clause {
 sub where { DBIx::Custom::Where->new(dbi => shift, @_) }
 
 sub _create_query {
-  
+
   my ($self, $source, $after_build_sql, $prepare_attr) = @_;
-  
+
   $prepare_attr ||= {};
-  
+
   # Create query
   my $sql = " " . $source || '';
   my @columns;
@@ -1245,46 +1245,46 @@ sub _create_query {
   }
   $new_sql .= $sql;
   $new_sql =~ s/\\:/:/g if index($new_sql, "\\:") != -1;
-  
+
   # Create query
   my $query = {sql => $new_sql, columns => \@columns, duplicate => $duplicate};
 
   # Filter SQL
   $query->{sql} = $after_build_sql->($query->{sql}) if $after_build_sql;
-  
+
   # Save sql
   $self->{last_sql} = $query->{sql};
-  
+
   # Prepare statement handle
   my $sth;
   eval { $sth = $self->dbh->prepare($query->{sql}, $prepare_attr) };
-  
+
   if ($@) {
     $self->_croak($@, qq{. Following SQL is executed.\n}
                     . qq{$query->{sql}\n} . _subname);
   }
-  
+
   # Set statement handle
   $query->{sth} = $sth;
-  
+
   # Set filters
   $query->{filters} = $self->{filters} || $self->filters;
-  
+
   return $query;
 }
 
 sub _create_bind_values {
   my ($self, $params, $columns, $filter, $type_filters, $bind_type) = @_;
-  
+
   $bind_type = _array_to_hash($bind_type) if ref $bind_type eq 'ARRAY';
-  
+
   # Create bind values
   my @bind;
   my @types;
   my %count;
   my %not_exists;
   for my $column (@$columns) {
-    
+
     # Bind value
     if(ref $params->{$column} eq 'ARRAY') {
       my $i = $count{$column} || 0;
@@ -1303,12 +1303,12 @@ sub _create_bind_values {
       next unless $found;
     }
     else { push @bind, $params->{$column} }
-    
+
     # Filter
     if (my $f = $filter->{$column} || '') {
       $bind[-1] = $f->($bind[-1]);
     }
-    
+
     # Type rule
     if ($self->{_type_rule_is_called}) {
       my $tf1 = $self->{"_into1"}->{dot}->{$column}
@@ -1318,26 +1318,26 @@ sub _create_bind_values {
         || $type_filters->{2}->{$column};
       $bind[-1] = $tf2->($bind[-1]) if $tf2;
     }
-   
+
     # Bind types
     push @types, $bind_type->{$column};
-    
-    # Count up 
+
+    # Count up
     $count{$column}++;
   }
-  
+
   return (\@bind, \@types);
 }
 
 sub _id_to_param {
   my ($self, $id, $primary_keys, $table) = @_;
-  
+
   # Check primary key
   croak "primary_key option " .
         "must be specified when id option is used" . _subname
     unless defined $primary_keys;
   $primary_keys = [$primary_keys] unless ref $primary_keys eq 'ARRAY';
-  
+
   # Create parameter
   my $param = {};
   if (defined $id) {
@@ -1348,13 +1348,13 @@ sub _id_to_param {
       $param->{$key} = $id->[$i];
     }
   }
-  
+
   return $param;
 }
 
 sub _connect {
   my $self = shift;
-  
+
   # Attributes
   my $dsn = $self->dsn;
   croak qq{"dsn" must be specified } . _subname
@@ -1363,26 +1363,26 @@ sub _connect {
   my $password    = $self->password;
   my $option = $self->option;
   $option = {%{$self->default_option}, %$option};
-  
+
   # Connect
   my $dbh;
   eval { $dbh = DBI->connect($dsn, $user, $password, $option) };
-  
+
   # Connect error
   croak "$@ " . _subname if $@;
-  
+
   return $dbh;
 }
 
 sub _croak {
   my ($self, $error, $append) = @_;
-  
+
   # Append
   $append ||= "";
-  
+
   # Verbose
   if ($Carp::Verbose) { croak $error }
-  
+
   # Not verbose
   else {
     # Remove line and module information
@@ -1397,7 +1397,7 @@ sub _driver { lc shift->{dbh}->{Driver}->{Name} }
 
 sub _need_tables {
   my ($self, $tree, $need_tables, $tables) = @_;
-  
+
   # Get needed tables
   for my $table (@$tables) {
     if ($tree->{$table}) {
@@ -1409,11 +1409,11 @@ sub _need_tables {
 
 sub _push_join {
   my ($self, $sql, $join, $join_tables) = @_;
-  
+
   # Push join clause
   my $tree = {};
   for (my $i = 0; $i < @$join; $i++) {
-    
+
     # Arrange
     my $join_clause;;
     my $option;
@@ -1439,7 +1439,7 @@ sub _push_join {
       $j_clause =~ s/'.+?'//g;
       my $q_re = quotemeta($q);
       $j_clause =~ s/[$q_re]//g;
-      
+
       my @j_clauses = reverse split /\s(and|on)\s/, $j_clause;
       my $c = $self->{safety_character};
       my $join_re = qr/((?:[$c]+?\.[$c]+?)|(?:[$c]+?))\.[$c]+[^$c].*?((?:[$c]+?\.[$c]+?)|(?:[$c]+?))\.[$c]+/sm;
@@ -1448,7 +1448,7 @@ sub _push_join {
           $table1 = $1;
           $table2 = $2;
           last;
-        }                
+        }
       }
     }
     croak qq{join clause must have two table name after "on" keyword. } .
@@ -1461,13 +1461,13 @@ sub _push_join {
     $tree->{$table2}
       = {position => $i, parent => $table1, join => $join_clause};
   }
-  
+
   # Search need tables
   my $need_tables = {};
   $self->_need_tables($tree, $need_tables, $join_tables);
   my @need_tables = sort { $tree->{$a}{position} <=> $tree->{$b}{position} }
     keys %$need_tables;
-  
+
   # Add join clause
   $$sql .= $tree->{$_}{join} . ' ' for @need_tables;
 }
@@ -1479,11 +1479,11 @@ sub _quote {
 
 sub _remove_duplicate_table {
   my ($self, $tables, $main_table) = @_;
-  
+
   # Remove duplicate table
   my %tables = map {defined $_ ? ($_ => 1) : ()} @$tables;
   delete $tables{$main_table} if $main_table;
-  
+
   my $new_tables = [keys %tables, $main_table ? $main_table : ()];
   if (my $q = $self->_quote) {
     $q = quotemeta($q);
@@ -1495,14 +1495,14 @@ sub _remove_duplicate_table {
 
 sub _search_tables {
   my ($self, $source) = @_;
-  
+
   # Search tables
   my $tables = [];
   my ($q, $p) = $self->_qp(quotemeta => 1);
   $source =~ s/$q//g;
   $source =~ s/$p//g;
   my $c = $self->safety_character;
-  
+
   while ($source =~ /((?:[$c]+?\.[$c]+?)|(?:[$c]+?))\.[$c]+/g) {
     push @$tables, $1;
   }
@@ -1527,7 +1527,7 @@ sub _where_clause_and_param {
         $table = $1;
         $c = $2;
       }
-      
+
       my $table_quote;
       $table_quote = $self->_tq($table) if defined $table;
       my $column_quote = $self->q($c);
@@ -1542,10 +1542,10 @@ sub _where_clause_and_param {
       }
       else { push @$clause, "$column_quote = :$column" }
     }
-    
+
     $w->{clause} = @$clause ? "where ( " . join(' and ', @$clause) . " ) " : '' ;
     $w->{param} = $where;
-  }  
+  }
   elsif (ref $where) {
     my $obj;
 
@@ -1553,7 +1553,7 @@ sub _where_clause_and_param {
     elsif (ref $where eq 'ARRAY') {
       $obj = $self->where(clause => $where->[0], param => $where->[1]);
     }
-    
+
     # Check where argument
     croak qq{"where" must be hash reference or DBIx::Custom::Where object}
         . qq{or array reference, which contains where clause and parameter}
@@ -1567,7 +1567,7 @@ sub _where_clause_and_param {
   elsif ($where) {
     $w->{clause} = "where $where";
   }
-  
+
   return $w;
 }
 
@@ -1580,7 +1580,7 @@ DBIx::Custom - DBI extension to execute insert, update, delete, and select easil
 =head1 SYNOPSIS
 
   use DBIx::Custom;
-  
+
   # Connect
   my $dbi = DBIx::Custom->connect(
     dsn => "dbi:mysql:database=dbname",
@@ -1589,13 +1589,13 @@ DBIx::Custom - DBI extension to execute insert, update, delete, and select easil
     option => {mysql_enable_utf8 => 1}
   );
 
-  # Insert 
+  # Insert
   $dbi->insert({title => 'Perl', author => 'Ken'}, table  => 'book');
-  
-  # Update 
+
+  # Update
   $dbi->update({title => 'Perl', author => 'Ken'}, table  => 'book',
     where  => {id => 5});
-  
+
   # Delete
   $dbi->delete(table  => 'book', where => {author => 'Ken'});
 
@@ -1625,17 +1625,17 @@ DBIx::Custom - DBI extension to execute insert, update, delete, and select easil
     join => ['left outer join company on book.company_id = company.id'],
     append => 'order by id limit 0, 5'
   );
-  
+
   # Get all rows or only one row
   my $rows = $result->all;
   my $row = $result->one;
-  
+
   # Execute SQL.
   my $result = $dbi->execute(
     "select id from book where author = :author and title like :title",
     {author => 'ken', title => '%Perl%'}
   );
-  
+
 =head1 DESCRIPTION
 
 L<DBIx::Custom> is L<DBI> wrapper module to execute SQL easily.
@@ -1667,7 +1667,7 @@ Connection manager support
 
 Choice your favorite relational database management system,
 C<MySQL>, C<SQLite>, C<PostgreSQL>, C<Oracle>,
-C<Microsoft SQL Server>, C<Microsoft Access>, C<DB2> or anything, 
+C<Microsoft SQL Server>, C<Microsoft Access>, C<DB2> or anything,
 
 =item *
 
@@ -1725,7 +1725,7 @@ C<default_option> to L<DBIx::Connector> C<new> method.
     $password,
     DBIx::Custom->new->default_option
   );
-  
+
   my $dbi = DBIx::Custom->connect(connector => $connector);
 
 If C<connector> is set to 1 when connect method is called,
@@ -1733,7 +1733,7 @@ L<DBIx::Connector> is automatically set to C<connector>
 
   my $dbi = DBIx::Custom->connect(
     dsn => $dsn, user => $user, password => $password, connector => 1);
-  
+
   my $connector = $dbi->connector; # DBIx::Connector
 
 Note that L<DBIx::Connector> must be installed.
@@ -2021,10 +2021,10 @@ You can change separator by C<separator> attribute.
 
   # Separator is hyphen
   $dbi->separator('-');
-  
+
   book.author as "book-author",
   book.title as "book-title"
-  
+
 =head2 connect
 
   my $dbi = DBIx::Custom->connect(
@@ -2037,7 +2037,7 @@ You can change separator by C<separator> attribute.
 Connect to the database and create a new L<DBIx::Custom> object.
 
 L<DBIx::Custom> is a wrapper of L<DBI>.
-C<AutoCommit> and C<RaiseError> options are true, 
+C<AutoCommit> and C<RaiseError> options are true,
 and C<PrintError> option is false by default.
 
 =head2 count
@@ -2135,9 +2135,9 @@ Options is same as C<delete>.
   $dbi->each_column(
     sub {
       my ($dbi, $table, $column, $column_info) = @_;
-      
+
       my $type = $column_info->{TYPE_NAME};
-      
+
       if ($type eq 'DATE') {
           # ...
       }
@@ -2162,7 +2162,7 @@ the following way.
   $dbi->each_table(
     sub {
       my ($dbi, $table, $table_info) = @_;
-      
+
       my $table_name = $table_info->{TABLE_NAME};
     }
   );
@@ -2199,10 +2199,10 @@ Return value is L<DBIx::Custom::Result> object when select statement is executed
 or the count of affected rows when insert, update, delete statement is executed.
 
 Named placeholder such as C<:title> is replaced by placeholder C<?>.
-  
+
   # Original
   select * from book where title = :title and author like :author
-  
+
   # Replaced
   select * from where title = ? and author like ?;
 
@@ -2211,7 +2211,7 @@ by C<name{operator}> syntax.
 
   # Original
   select * from book where :title{=} and :author{like}
-  
+
   # Replaced
   select * from where title = ? and author like ?;
 
@@ -2227,7 +2227,7 @@ The following options are available.
 
 =over 4
 
-=item C<after_build_sql> 
+=item C<after_build_sql>
 
 You can filter sql after the sql is build.
 
@@ -2272,7 +2272,7 @@ This is used to bind parameter by C<bind_param> of statement handle.
   $sth->bind_param($pos, $value, DBI::SQL_BLOB);
 
 =item C<filter>
-  
+
   filter => {
     title  => sub { uc $_[0] }
     author => sub { uc $_[0] }
@@ -2283,7 +2283,7 @@ This is used to bind parameter by C<bind_param> of statement handle.
     title  => 'upper_case',
     author => 'upper_case'
   }
-      
+
   # At once
   filter => [
     [qw/title author/]  => sub { uc $_[0] }
@@ -2295,11 +2295,11 @@ This filter is executed before data is saved into database.
 and before type rule filter is executed.
 
 =item C<reuse>
-  
+
   reuse => $hash_ref
 
 Reuse query object if the hash reference variable is set.
-  
+
   my $queries = {};
   $dbi->execute($sql, $param, reuse => $queries);
 
@@ -2321,7 +2321,7 @@ If you set C<select> to 1, this statement become select statement
 and return value is always L<DBIx::Custom::Result> object.
 
 =item C<table>
-  
+
   table => 'author'
 
 If you want to omit table name in column name
@@ -2393,7 +2393,7 @@ You can set this value to C<user_table_info>.
   $dbi->helper(
     find_or_create   => sub {
       my $self = shift;
-      
+
       # Process
     },
     ...
@@ -2439,7 +2439,7 @@ and use the following new ones.
 
   bulk_insert => 1
 
-bulk insert is executed if database support bulk insert and 
+bulk insert is executed if database support bulk insert and
 multiple parameters is passed to C<insert>.
 The SQL like the following one is executed.
 
@@ -2529,7 +2529,7 @@ B<MyModel.pm>
 
   package MyModel;
   use DBIx::Custom::Model -base;
-  
+
   1;
 
 Model modules, extending name space module.
@@ -2538,16 +2538,16 @@ B<MyModel/book.pm>
 
   package MyModel::book;
   use MyModel -base;
-  
+
   1;
 
 B<MyModel/company.pm>
 
   package MyModel::company;
   use MyModel -base;
-  
+
   1;
-  
+
 MyModel::book and MyModel::company is included by C<include_model>.
 
 You can get model object by C<model>.
@@ -2649,7 +2649,7 @@ Quote string by value of C<quote>.
       return Time::Piece->strptime($date, '%Y-%m-%d');
     }
   );
-  
+
 Register filters, used by C<filter> option of many methods.
 
 =head2 select
@@ -2659,7 +2659,7 @@ Register filters, used by C<filter> option of many methods.
     table  => 'book',
     where  => {author => 'Ken'},
   );
-  
+
 Execute select statement.
 
 You can pass odd number arguments. first argument is C<column>.
@@ -2674,12 +2674,12 @@ and use the following new ones.
 =over 4
 
 =item C<column>
-  
+
   column => 'author'
   column => ['author', 'title']
 
 Column clause.
-  
+
 if C<column> is not specified, '*' is set.
 
   column => '*'
@@ -2731,17 +2731,17 @@ The above is same as the following one.
     where => {id1 => 4, id2 => 5},
     table => 'book'
   );
-  
+
 =item C<param>
 
   param => {'table2.key3' => 5}
 
 Parameter shown before where clause.
-  
-For example, if you want to contain named placeholder in join clause, 
+
+For example, if you want to contain named placeholder in join clause,
 you can pass parameter by C<param> option.
 
-  join  => ['inner join (select * from table2 where table2.key3 = :table2.key3)' . 
+  join  => ['inner join (select * from table2 where table2.key3 = :table2.key3)' .
             ' as table2 on table1.key1 = table2.key1']
 
 =item C<prefix>
@@ -2758,7 +2758,7 @@ Prefix of column clause
     'left outer join company on book.company_id = company_id',
     'left outer join location on company.location_id = location.id'
   ]
-      
+
 Join clause. If column clause or where clause contain table name like "company.name",
 join clauses needed when SQL is created is used automatically.
 
@@ -2802,39 +2802,39 @@ the join clause correctly.
 Table name.
 
 =item C<where>
-  
+
   # (1) Hash reference
   where => {author => 'Ken', 'title' => ['Perl', 'Ruby']}
   # -> where author = 'Ken' and title in ('Perl', 'Ruby')
-  
+
   # (2) DBIx::Custom::Where object
   where => $dbi->where(
     clause => ['and', ':author{=}', ':title{like}'],
     param  => {author => 'Ken', title => '%Perl%'}
   )
   # -> where author = 'Ken' and title like '%Perl%'
-  
+
   # (3) Array reference[Array refenrece, Hash reference]
   where => [
     ['and', ':author{=}', ':title{like}'],
     {author => 'Ken', title => '%Perl%'}
   ]
   # -> where author = 'Ken' and title like '%Perl%'
-  
+
   # (4) Array reference[String, Hash reference]
   where => [
     ':author{=} and :title{like}',
     {author => 'Ken', title => '%Perl%'}
   ]
   #  -> where author = 'Ken' and title like '%Perl%'
-  
+
   # (5) String
   where => 'title is null'
   #  -> where title is null
 
 Where clause.
 See also L<DBIx::Custom::Where> to know how to create where clause.
-  
+
 =back
 
 =head2 setup_model
@@ -3135,7 +3135,7 @@ Suppress deprecation warnings before specified version.
 =head1 DEPRECATED FUNCTIONALITY
 
 L<DBIx::Custom::Result>
-  
+
   # Options
   kv method's multi option (from 0.28) # will be removed at 2018/3/1
 
